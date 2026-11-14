@@ -17,15 +17,20 @@ export const botStatus = {
 
 let currentSocket;
 let startPromise;
+let authAlreadyRegistered = false;
 
 export async function startWhatsApp() {
-  if (botStatus.connected || currentSocket) return;
-  if (startPromise) return startPromise;
+  if (botStatus.connected || currentSocket) return currentSocket;
+  if (startPromise) {
+    await startPromise;
+    return currentSocket;
+  }
 
   botStatus.connecting = true;
   startPromise = (async () => {
     try {
       const { state, saveCreds } = await useMultiFileAuthState(config.authDir);
+      authAlreadyRegistered = Boolean(state.creds.registered);
       const sock = makeWASocket({
         auth: state,
         logger: pino({ level: "silent" }),
@@ -39,9 +44,8 @@ export async function startWhatsApp() {
       sock.ev.on("creds.update", saveCreds);
 
       sock.ev.on("connection.update", ({ connection, lastDisconnect, qr }) => {
-        if (qr) {
+        if (qr && !botStatus.pairingCode) {
           botStatus.qr = qr;
-          botStatus.pairingCode = null;
           botStatus.lastUpdate = new Date().toISOString();
         }
 
@@ -57,6 +61,7 @@ export async function startWhatsApp() {
           botStatus.pairingCode = null;
           botStatus.phone = sock.user?.id?.split(":")[0] || null;
           botStatus.lastUpdate = new Date().toISOString();
+          authAlreadyRegistered = true;
           console.log("[WHATSAPP] Terhubung.");
         }
 
@@ -71,11 +76,10 @@ export async function startWhatsApp() {
 
           const statusCode = lastDisconnect?.error?.output?.statusCode;
           const loggedOut = statusCode === DisconnectReason.loggedOut;
-          console.log("[WHATSAPP] Koneksi terputus.", loggedOut ? "Perlu tautkan ulang." : "Mencoba menyambung kembali...");
+          if (loggedOut) authAlreadyRegistered = false;
 
-          if (!loggedOut) {
-            setTimeout(() => startWhatsApp().catch(console.error), 5000);
-          }
+          console.log("[WHATSAPP] Koneksi terputus.", loggedOut ? "Perlu tautkan ulang." : "Mencoba menyambung kembali...");
+          if (!loggedOut) setTimeout(() => startWhatsApp().catch(console.error), 5000);
         }
       });
 
@@ -95,17 +99,23 @@ export async function startWhatsApp() {
     }
   })();
 
-  return startPromise;
+  await startPromise;
+  return currentSocket;
 }
 
 export async function createPairingCode(phoneNumber) {
   if (botStatus.connected) throw new Error("WhatsApp sudah terhubung.");
-  if (!currentSocket) throw new Error("Tekan Hubungkan WhatsApp terlebih dahulu, lalu tunggu sebentar.");
-  if (currentSocket.authState?.creds?.registered) {
-    throw new Error("Sesi WhatsApp sudah terdaftar. Putuskan sesi lama sebelum meminta kode baru.");
+  if (authAlreadyRegistered) {
+    throw new Error("Sesi WhatsApp sudah terdaftar. Gunakan sesi yang aktif atau keluarkan perangkat lama terlebih dahulu.");
   }
 
-  const code = await currentSocket.requestPairingCode(phoneNumber);
+  const sock = currentSocket || await startWhatsApp();
+  if (!sock) throw new Error("Koneksi WhatsApp belum siap. Coba lagi sebentar.");
+  if (typeof sock.requestPairingCode !== "function") {
+    throw new Error("Versi library saat ini tidak mendukung pairing code.");
+  }
+
+  const code = await sock.requestPairingCode(phoneNumber);
   botStatus.pairingCode = code;
   botStatus.qr = null;
   botStatus.lastUpdate = new Date().toISOString();
