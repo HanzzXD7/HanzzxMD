@@ -3,7 +3,8 @@
 WhatsApp bot starter dengan Node.js, Baileys, dan private dashboard.
 
 ## Fitur awal
-- Pairing WhatsApp melalui QR (opsional, dinonaktifkan secara default).
+- Penautan WhatsApp melalui QR Code yang ditampilkan di dashboard.
+- Penautan WhatsApp melalui pairing code dari nomor telepon.
 - Perintah dasar: `.menu`, `.ping`, `.status`, `.owner`.
 - Dashboard minimal dengan HTTP Basic Authentication.
 - Endpoint pemeriksaan layanan: `/health`.
@@ -13,17 +14,22 @@ WhatsApp bot starter dengan Node.js, Baileys, dan private dashboard.
 - Salin `.env.example` menjadi `.env`.
 - Atur `DASHBOARD_USERNAME` dan `DASHBOARD_PASSWORD` dengan kredensial unik.
 - Atur `OWNER_NUMBER` dengan nomor WhatsApp format internasional tanpa tanda plus.
-- Biarkan `ENABLE_WHATSAPP=false` sampai dashboard dan konfigurasi diperiksa.
+- Biarkan `ENABLE_WHATSAPP=false` saat pertama kali memeriksa dashboard.
 - Jalankan `npm install`, lalu `npm start`.
 
-## Mengaktifkan WhatsApp
-Setelah siap menghubungkan akun, ubah `ENABLE_WHATSAPP=true` pada environment variables. QR akan muncul di terminal. Pindai hanya dari menu Perangkat tertaut di WhatsApp milik sendiri. Jangan bagikan QR, kredensial, atau folder sesi.
+## Menghubungkan WhatsApp
+1. Buka dashboard melalui alamat server dan login.
+2. Tekan **Hubungkan WhatsApp**.
+3. Pilih tab **QR Code** untuk memindai QR melalui menu Perangkat tertaut di WhatsApp, atau pilih **Nomor telepon** untuk meminta pairing code.
+4. Masukkan pairing code pada menu Perangkat tertaut → Tautkan dengan nomor telepon di WhatsApp.
+
+Gunakan hanya akun WhatsApp milik sendiri. Jangan membagikan QR, pairing code, kredensial, atau folder sesi. Kode penautan bersifat rahasia dan hanya ditampilkan pada dashboard yang dilindungi login.
 
 Baileys adalah integrasi tidak resmi melalui WhatsApp Web. Penggunaan dapat memiliki risiko pembatasan akun dan tidak dijamin oleh WhatsApp.
 
 ## Keamanan
 - Jangan commit file `.env`, folder `data/`, QR, atau data sesi.
-- Jangan pernah mengirim QR, password, token, atau file sesi kepada orang lain.
+- Jangan pernah mengirim QR, pairing code, password, token, atau file sesi kepada orang lain.
 - Dashboard memakai HTTP Basic Authentication. Gunakan hanya melalui HTTPS saat di-host di internet.
 - Gunakan password dashboard yang panjang dan unik.
 
