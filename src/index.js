@@ -1,10 +1,16 @@
+import { config } from "./config.js";
 import { startDashboard } from "./dashboard/server.js";
-import { startWhatsApp } from "./bot/connection.js";
 
 startDashboard();
-startWhatsApp().catch((error) => {
-  console.error("[STARTUP] Bot gagal dimulai:", error);
-});
+
+if (config.enableWhatsApp) {
+  const { startWhatsApp } = await import("./bot/connection.js");
+  startWhatsApp().catch((error) => {
+    console.error("[STARTUP] Bot gagal dimulai:", error);
+  });
+} else {
+  console.log("[STARTUP] Dashboard aktif; koneksi WhatsApp belum diaktifkan.");
+}
 
 process.on("unhandledRejection", (error) => {
   console.error("[UNHANDLED REJECTION]", error);
