@@ -1,8 +1,9 @@
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import QRCode from "qrcode";
 import { config } from "../config.js";
-import { botStatus } from "../bot/connection.js";
+import { botStatus, startWhatsApp, createPairingCode } from "../bot/connection.js";
 
 const app = express();
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -10,6 +11,7 @@ const publicDir = path.resolve(here, "../../public");
 const startedAt = Date.now();
 
 app.disable("x-powered-by");
+app.use(express.json({ limit: "2kb" }));
 app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "no-referrer");
@@ -51,13 +53,54 @@ function requireDashboardAuth(req, res, next) {
 }
 
 app.use("/", requireDashboardAuth);
-app.get("/api/status", (req, res) => {
+
+app.get("/api/status", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  let qrDataUrl = null;
+  if (botStatus.qr) {
+    try {
+      qrDataUrl = await QRCode.toDataURL(botStatus.qr, { width: 240, margin: 2 });
+    } catch {
+      qrDataUrl = null;
+    }
+  }
+
   res.json({
-    ...botStatus,
+    connected: botStatus.connected,
+    connecting: botStatus.connecting,
+    phone: botStatus.phone,
+    qrDataUrl,
+    pairingCode: botStatus.pairingCode,
+    lastUpdate: botStatus.lastUpdate,
     uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
     service: "HanzzxMD"
   });
 });
+
+app.post("/api/whatsapp/start", async (req, res) => {
+  try {
+    await startWhatsApp();
+    res.json({ ok: true, message: "Koneksi WhatsApp dimulai. Tunggu QR muncul." });
+  } catch (error) {
+    res.status(500).json({ ok: false, message: error.message || "Gagal memulai koneksi." });
+  }
+});
+
+app.post("/api/whatsapp/pairing-code", async (req, res) => {
+  const phone = String(req.body?.phone || "").replace(/\D/g, "");
+  if (!/^\d{8,15}$/.test(phone)) {
+    return res.status(400).json({ ok: false, message: "Masukkan nomor internasional 8–15 digit tanpa tanda +." });
+  }
+
+  try {
+    const code = await createPairingCode(phone);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ ok: true, code });
+  } catch (error) {
+    res.status(400).json({ ok: false, message: error.message || "Kode pairing belum bisa dibuat." });
+  }
+});
+
 app.use(express.static(publicDir));
 
 export function startDashboard() {
