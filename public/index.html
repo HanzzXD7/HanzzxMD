@@ -11,25 +11,19 @@
   <main class="shell">
     <header class="topbar">
       <div class="brand-mark">H</div>
-      <div>
-        <p class="eyebrow">PRIVATE CONTROL PANEL</p>
-        <h1>HanzzxMD</h1>
-      </div>
+      <div><p class="eyebrow">PRIVATE CONTROL PANEL</p><h1>HanzzxMD</h1></div>
       <span class="private-tag">PRIVATE</span>
     </header>
 
     <section class="welcome">
       <p class="eyebrow">OVERVIEW</p>
       <h2>Dashboard bot</h2>
-      <p class="muted">Pantau koneksi WhatsApp dan kondisi layanan.</p>
+      <p class="muted">Kelola koneksi WhatsApp dan pantau kondisi layanan.</p>
     </section>
 
     <section class="status-card">
       <div class="status-heading">
-        <div>
-          <p class="eyebrow">WHATSAPP CONNECTION</p>
-          <h3 id="connection">Memuat status...</h3>
-        </div>
+        <div><p class="eyebrow">WHATSAPP CONNECTION</p><h3 id="connection">Memuat status...</h3></div>
         <span class="status-dot" id="status-dot"></span>
       </div>
       <p class="muted" id="phone">Nomor: —</p>
@@ -40,20 +34,57 @@
       </div>
     </section>
 
+    <section class="module-card pairing-card">
+      <p class="eyebrow">LINK WHATSAPP</p>
+      <h3>Tautkan perangkat</h3>
+      <p class="muted">Pilih salah satu cara untuk menghubungkan akun WhatsApp.</p>
+      <button class="primary-button" id="connect-button">Hubungkan WhatsApp</button>
+      <div class="tabs" role="tablist" aria-label="Metode penautan">
+        <button class="tab active" data-method="qr" type="button">QR Code</button>
+        <button class="tab" data-method="phone" type="button">Nomor telepon</button>
+      </div>
+
+      <div id="qr-panel" class="method-panel">
+        <div class="qr-frame"><img id="qr-image" alt="QR WhatsApp untuk ditautkan" hidden><div id="qr-placeholder">QR akan tampil setelah koneksi dimulai.</div></div>
+        <p class="muted center" id="qr-hint">Buka WhatsApp → Perangkat tertaut → Tautkan perangkat.</p>
+      </div>
+
+      <div id="phone-panel" class="method-panel" hidden>
+        <label for="phone-input">Nomor WhatsApp dengan kode negara</label>
+        <input id="phone-input" type="tel" inputmode="numeric" autocomplete="tel" placeholder="62812xxxxxxxx">
+        <button class="primary-button" id="pair-button">Minta Pairing Code</button>
+        <div class="pair-code" id="pair-code" hidden></div>
+        <p class="muted" id="pair-hint">Masukkan nomor tanpa tanda +, spasi, atau strip. Kode akan muncul di panel ini.</p>
+      </div>
+      <p class="notice">Jangan bagikan QR atau pairing code kepada siapa pun. Gunakan hanya pada WhatsApp milikmu.</p>
+      <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
+    </section>
+
     <section class="module-card">
       <p class="eyebrow">CURRENT MODULES</p>
       <div class="module-row"><span>Basic commands</span><span class="available">READY</span></div>
       <div class="module-row"><span>Private dashboard</span><span class="available">READY</span></div>
       <div class="module-row"><span>Group commands</span><span class="muted">DISABLED</span></div>
     </section>
-
     <footer>HanzzxMD · Early development</footer>
   </main>
+
   <script>
     const connection = document.getElementById("connection");
     const dot = document.getElementById("status-dot");
     const phone = document.getElementById("phone");
     const uptime = document.getElementById("uptime");
+    const qrImage = document.getElementById("qr-image");
+    const qrPlaceholder = document.getElementById("qr-placeholder");
+    const pairCode = document.getElementById("pair-code");
+    const feedback = document.getElementById("feedback");
+    const connectButton = document.getElementById("connect-button");
+    let selectedMethod = "qr";
+
+    function showMessage(message, isError = false) {
+      feedback.textContent = message;
+      feedback.classList.toggle("error", isError);
+    }
 
     function formatUptime(total) {
       const days = Math.floor(total / 86400);
@@ -61,6 +92,55 @@
       const minutes = Math.floor((total % 3600) / 60);
       return days ? days + "h " + hours + "j" : hours + "j " + minutes + "m";
     }
+
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        selectedMethod = tab.dataset.method;
+        document.querySelectorAll(".tab").forEach((item) => item.classList.toggle("active", item === tab));
+        document.getElementById("qr-panel").hidden = selectedMethod !== "qr";
+        document.getElementById("phone-panel").hidden = selectedMethod !== "phone";
+      });
+    });
+
+    connectButton.addEventListener("click", async () => {
+      connectButton.disabled = true;
+      showMessage("Memulai koneksi WhatsApp...");
+      try {
+        const response = await fetch("/api/whatsapp/start", { method: "POST" });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message);
+        showMessage(result.message);
+        await refreshStatus();
+      } catch (error) {
+        showMessage(error.message || "Gagal memulai koneksi.", true);
+      } finally {
+        connectButton.disabled = false;
+      }
+    });
+
+    document.getElementById("pair-button").addEventListener("click", async () => {
+      const button = document.getElementById("pair-button");
+      const phoneNumber = document.getElementById("phone-input").value;
+      button.disabled = true;
+      pairCode.hidden = true;
+      showMessage("Meminta pairing code...");
+      try {
+        const response = await fetch("/api/whatsapp/pairing-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: phoneNumber })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message);
+        pairCode.textContent = result.code;
+        pairCode.hidden = false;
+        showMessage("Masukkan kode ini pada menu Perangkat tertaut di WhatsApp.");
+      } catch (error) {
+        showMessage(error.message || "Gagal membuat pairing code.", true);
+      } finally {
+        button.disabled = false;
+      }
+    });
 
     async function refreshStatus() {
       try {
@@ -71,6 +151,27 @@
         dot.classList.toggle("online", data.connected);
         phone.textContent = "Nomor: " + (data.phone || "Belum terhubung");
         uptime.textContent = formatUptime(data.uptimeSeconds || 0);
+
+        if (data.qrDataUrl && !data.connected && selectedMethod === "qr") {
+          qrImage.src = data.qrDataUrl;
+          qrImage.hidden = false;
+          qrPlaceholder.hidden = true;
+        } else if (!data.qrDataUrl) {
+          qrImage.hidden = true;
+          qrPlaceholder.hidden = false;
+          qrPlaceholder.textContent = data.connected ? "WhatsApp sudah terhubung." : "QR akan tampil setelah koneksi dimulai.";
+        }
+
+        if (data.pairingCode && selectedMethod === "phone" && !data.connected) {
+          pairCode.textContent = data.pairingCode;
+          pairCode.hidden = false;
+        }
+        if (data.connected) {
+          pairCode.hidden = true;
+          qrImage.hidden = true;
+          qrPlaceholder.hidden = false;
+          qrPlaceholder.textContent = "WhatsApp berhasil terhubung.";
+        }
       } catch {
         connection.textContent = "Tidak dapat memuat status";
         dot.classList.remove("online");
@@ -78,7 +179,7 @@
     }
 
     refreshStatus();
-    setInterval(refreshStatus, 10000);
+    setInterval(refreshStatus, 2500);
   </script>
 </body>
 </html>
